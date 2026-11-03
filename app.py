@@ -12,6 +12,7 @@ import html
 import os
 import re
 import sqlite3
+import urllib.parse
 from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
@@ -49,6 +50,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
         price REAL NOT NULL DEFAULT 0, stock TEXT NOT NULL DEFAULT '',
+        image TEXT NOT NULL DEFAULT '',
         active INTEGER NOT NULL DEFAULT 1, created TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +81,10 @@ def init_db():
                 "city", "postal_code", "mobile_number"):
         if col not in existing_cols:
             con.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+    # Item image (e.g. a service logo) - added for existing databases too.
+    item_cols = [r[1] for r in con.execute("PRAGMA table_info(items)").fetchall()]
+    if "image" not in item_cols:
+        con.execute("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''")
     defaults = {
         "support_name": "Hammad",
         "support_number": "03704984676",
@@ -89,6 +95,21 @@ def init_db():
     }
     for k, v in defaults.items():
         con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)", (k, v))
+    # Seed the requested Surfshark service (with its logo) if it is not
+    # already listed. This keeps the service present after a fresh deploy
+    # on free hosting, where the live SQLite file can reset.
+    surf = con.execute(
+        "SELECT id, image FROM items WHERE name=?",
+        ("Surfshark VPN - 1 Month Subscription (1 Device)",)).fetchone()
+    if surf and not (surf[1] or "").strip():
+        con.execute("UPDATE items SET image=? WHERE id=?", ("surfshark.jpg", surf[0]))
+    if not surf:
+        con.execute(
+            "INSERT INTO items(type, name, description, price, stock, image, created) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            ("digital", "Surfshark VPN - 1 Month Subscription (1 Device)",
+             "Surfshark VPN 1 Month Subscription for 1 Device. Duration: 1 Month. Devices: 1 Device.",
+             250, "", "surfshark.jpg", datetime.now().strftime("%Y-%m-%d %H:%M")))
     con.commit()
     con.close()
 
@@ -138,13 +159,13 @@ def order_field(order, key):
         return ""
 
 ORDER_DETAIL_FIELDS = [
-    ("full_name", "Full Name"),
-    ("delivery_address", "Full Delivery Address"),
-    ("country", "Country"),
-    ("state_province", "State / Province"),
-    ("city", "City"),
-    ("postal_code", "Postal / Zip Code"),
-    ("mobile_number", "Mobile Number"),
+    ("full_name", "Full Name — مکمل نام"),
+    ("delivery_address", "Full Delivery Address — مکمل ڈیلیوری ایڈریس"),
+    ("country", "Country — ملک"),
+    ("state_province", "State / Province — ریاست / صوبہ"),
+    ("city", "City — شہر"),
+    ("postal_code", "Postal / Zip Code — ڈاک کا کوڈ"),
+    ("mobile_number", "Mobile Number — موبائل نمبر"),
 ]
 
 def order_details_html(order):
@@ -186,8 +207,22 @@ def flash():
     msg = session.pop("msg", None)
     return f'<div class="msg">{esc(msg)}</div>' if msg else ""
 
+def item_img(it):
+    try:
+        img = (it["image"] or "").strip()
+    except Exception:
+        img = ""
+    if not img:
+        return ""
+    if img.startswith("http://") or img.startswith("https://") or img.startswith("/"):
+        src = img
+    else:
+        src = "/static/" + img
+    return (f'<img src="{esc(src)}" alt="{esc(it["name"])} logo" '
+            f'style="width:90px;height:auto;border-radius:10px;display:block;margin-bottom:8px">')
+
 def item_card(it):
-    return (f'<div class="card"><h3>{esc(it["name"])}</h3>'
+    return (f'<div class="card">{item_img(it)}<h3>{esc(it["name"])}</h3>'
             f'<span class="tag">{fmt_item_type(it["type"])}</span>'
             f'<p>{esc(it["description"] or "Details on request.")}</p>'
             f'<p class="price">{money(it["price"])}</p>'
@@ -385,7 +420,7 @@ def item_detail(item_id):
                        '<label>Comment<br><textarea name="comment" required></textarea></label><br>'
                        '<button class="btn" type="submit">Submit Review</button></form>'
                        '<p>Reviews are shown after admin approval.</p>')
-    body = (flash() + f"<h1>{esc(it['name'])}</h1><span class='tag'>{fmt_item_type(it['type'])}</span>"
+    body = (flash() + f"<h1>{esc(it['name'])}</h1>{item_img(it)}<span class='tag'>{fmt_item_type(it['type'])}</span>"
             f"<p>{esc(it['description'])}</p>"
             f"<p>{esc(it['stock'])}</p><p class='price'>{money(it['price'])}</p>"
             f'<form method="get" action="/checkout/{item_id}"><label>Quantity<br>'
@@ -426,8 +461,32 @@ def checkout(item_id):
     qty = max(1, qty)
     total = float(it["price"]) * qty
     if request.method == "POST":
+        # Login is mandatory on the website for every order, digital or
+        # physical: checkout() already redirects anonymous visitors to
+        # register/login, so u is always set here.
+        if it["type"] == "digital":
+            # Digital Services: only Name + Mobile Number, then straight
+            # to WhatsApp. The order is still saved first, so it appears
+            # in the Admin Dashboard and in the customer's order history.
+            full_name = (request.form.get("full_name") or "").strip()
+            mobile_number = (request.form.get("mobile_number") or "").strip()
+            if not full_name or not mobile_number:
+                session["msg"] = "Please fill in Full Name and Mobile Number."
+                return redirect(f"/checkout/{item_id}?qty={qty}")
+            con = db()
+            cur = con.execute(
+                "INSERT INTO orders(user_id, item_id, qty, total, payment_method, transaction_id, created, "
+                "full_name, delivery_address, country, state_province, city, postal_code, mobile_number) "
+                "VALUES(?, ?, ?, ?, 'WhatsApp', '', ?, ?, '', '', '', '', '', ?)",
+                (u["id"], item_id, qty, total, now(), full_name, mobile_number))
+            oid = cur.lastrowid
+            con.commit()
+            notify(u["id"], f"Order Confirmation: Order #{oid} placed for {it['name']} via WhatsApp.")
+            msg = (f"Hello, I want to order: {it['name']} x {qty} = Rs {total:.0f}. "
+                   f"Order #{oid}. Name: {full_name}. Mobile: {mobile_number}.")
+            return redirect(wa_link() + "?text=" + urllib.parse.quote(msg))
         txn = (request.form.get("transaction_id") or "").strip()
-        # Required order details, in English, for every item type.
+        # Physical Products: all 7 order details are required.
         details = {}
         for key, _label in ORDER_DETAIL_FIELDS:
             details[key] = (request.form.get(key) or "").strip()
@@ -452,19 +511,29 @@ def checkout(item_id):
         notify(u["id"], f"Order Confirmation: Order #{oid} placed for {it['name']}. Payment is pending admin verification.")
         session["msg"] = f"Order Confirmation: Order #{oid} received. Payment is pending admin verification."
         return redirect(f"/order/{oid}")
+    if it["type"] == "digital":
+        body = (flash() + f"<h1>Checkout</h1><p>{esc(it['name'])} &times; {qty} = <b>{money(total)}</b></p>"
+                "<h2>Digital Service</h2><p>Only Name and Mobile Number are needed. "
+                "Login on the website is mandatory: you are already logged in. "
+                "On submit, your order is saved and you go directly to WhatsApp to complete it.</p>"
+                f'<form method="post"><input type="hidden" name="qty" value="{qty}">'
+                f'<label>Full Name — مکمل نام<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
+                f'<label>Mobile Number — موبائل نمبر<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
+                '<button class="btn" type="submit">WhatsApp par Order karein</button></form>')
+        return page("Checkout", body, user=u)
     body = (flash() + f"<h1>Checkout</h1><p>{esc(it['name'])} &times; {qty} = <b>{money(total)}</b></p>"
-            "<h2>Order Details</h2><p>All fields below are required, for any product or service.</p>"
+            "<h2>Order Details</h2><p>All fields below are required for Physical Products.</p>"
             "<h2>Pay now - JazzCash (manual payment, no automatic gateway)</h2>"
             f"<p>Send <b>{money(total)}</b> to JazzCash number <b>{esc(setting('jazzcash_number'))}</b> "
             f"(account name: <b>{esc(setting('jazzcash_name'))}</b>), then enter your transaction ID below.</p>"
             f'<form method="post"><input type="hidden" name="qty" value="{qty}">'
-            f'<label>Full Name<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
-            '<label>Full Delivery Address<br><textarea name="delivery_address" required></textarea></label><br>'
-            '<label>Country<br><input name="country" required></label><br>'
-            '<label>State / Province<br><input name="state_province" required></label><br>'
-            '<label>City<br><input name="city" required></label><br>'
-            '<label>Postal / Zip Code<br><input name="postal_code" required></label><br>'
-            f'<label>Mobile Number<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
+            f'<label>Full Name — مکمل نام<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
+            '<label>Full Delivery Address — مکمل ڈیلیوری ایڈریس<br><textarea name="delivery_address" required></textarea></label><br>'
+            '<label>Country — ملک<br><input name="country" required></label><br>'
+            '<label>State / Province — ریاست / صوبہ<br><input name="state_province" required></label><br>'
+            '<label>City — شہر<br><input name="city" required></label><br>'
+            '<label>Postal / Zip Code — ڈاک کا کوڈ<br><input name="postal_code" required></label><br>'
+            f'<label>Mobile Number — موبائل نمبر<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
             '<label>JazzCash Transaction ID<br><input name="transaction_id" required placeholder="Enter transaction ID"></label><br>'
             '<button class="btn" type="submit">Confirm Payment &amp; Place Order</button></form>'
             "<p>Without all order details and a transaction ID the order will not be placed. After the admin verifies "
@@ -489,8 +558,9 @@ def order_detail(order_id):
             f"<p>Customer: {esc(o['uname'])} ({esc(o['uw'])})</p>"
             f"<p>Item: {esc(o['iname'])} ({fmt_item_type(o['itype'])}) &times; {o['qty']}</p>"
             f"<p>Total: {money(o['total'])}</p>"
-            f"<p>Payment: JazzCash &middot; Transaction ID: {esc(o['transaction_id'])} &middot; "
-            f"Payment status: <b>{esc(o['payment_status'])}</b></p>"
+            f"<p>Payment: {esc(o['payment_method'])}"
+            + (f" &middot; Transaction ID: {esc(o['transaction_id'])}" if o['transaction_id'] else "")
+            + f" &middot; Payment status: <b>{esc(o['payment_status'])}</b></p>"
             f"<p>Order status: <b>{esc(o['order_status'])}</b></p>"
             f"{order_details_html(o)}"
             f"<h2>Order Tracking</h2>{tracking_steps(o)}")
@@ -559,11 +629,12 @@ def admin_items():
     if r:
         return r
     if request.method == "POST":
-        db().execute("INSERT INTO items(type, name, description, price, stock, created) VALUES(?, ?, ?, ?, ?, ?)",
+        db().execute("INSERT INTO items(type, name, description, price, stock, image, created) VALUES(?, ?, ?, ?, ?, ?, ?)",
                      (request.form.get("type"), (request.form.get("name") or "").strip(),
                       (request.form.get("description") or "").strip(),
                       float(request.form.get("price") or 0),
-                      (request.form.get("stock") or "").strip(), now()))
+                      (request.form.get("stock") or "").strip(),
+                      (request.form.get("image") or "").strip(), now()))
         db().commit()
         session["msg"] = "Item added."
         return redirect(url_for("admin_items"))
@@ -582,6 +653,7 @@ def admin_items():
             <label>Description<br><textarea name="description"></textarea></label><br>
             <label>Price (Rs)<br><input type="number" step="1" min="0" name="price" required></label><br>
             <label>Stock / delivery info (for physical products)<br><input name="stock"></label><br>
+            <label>Image file in static folder, e.g. surfshark.jpg (optional)<br><input name="image"></label><br>
             <button class="btn" type="submit">Add Item</button></form>""")
     return page("Admin - Items", body)
 
@@ -594,11 +666,12 @@ def admin_item_edit(item_id):
     if not it:
         return page("Not found", "<h1>Item not found</h1>"), 404
     if request.method == "POST":
-        db().execute("UPDATE items SET type=?, name=?, description=?, price=?, stock=?, active=? WHERE id=?",
+        db().execute("UPDATE items SET type=?, name=?, description=?, price=?, stock=?, image=?, active=? WHERE id=?",
                      (request.form.get("type"), (request.form.get("name") or "").strip(),
                       (request.form.get("description") or "").strip(),
                       float(request.form.get("price") or 0),
                       (request.form.get("stock") or "").strip(),
+                      (request.form.get("image") or "").strip(),
                       1 if request.form.get("active") else 0, item_id))
         db().commit()
         session["msg"] = "Item updated."
@@ -610,6 +683,7 @@ def admin_item_edit(item_id):
             f"<label>Description<br><textarea name='description'>{esc(it['description'])}</textarea></label><br>"
             f"<label>Price (Rs)<br><input type='number' step='1' min='0' name='price' value='{it['price']}' required></label><br>"
             f"<label>Stock / delivery info<br><input name='stock' value='{esc(it['stock'])}'></label><br>"
+            f"<label>Image file in static folder, e.g. surfshark.jpg<br><input name='image' value='{esc(it['image'] if 'image' in it.keys() else '')}'></label><br>"
             f"<label><input type='checkbox' name='active'{' checked' if it['active'] else ''}> Active (visible to customers)</label><br>"
             f"<button class='btn' type='submit'>Save Changes</button></form>")
     return page("Edit Item", body)

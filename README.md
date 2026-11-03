@@ -49,3 +49,13 @@ Environment variables (optional):
 ## Deploy for free
 
 See `RENDER_DEPLOY.txt` for exact Render free-tier steps, including the important warning that SQLite on free Render without a persistent disk can reset on redeploy/restart.
+
+## Surfshark logo update (prepared 2026-11-03, not yet deployed live)
+- New file static/surfshark.jpg (logo supplied by the user).
+- Items now support an optional image (static filename or URL), shown on home, Services & Products, and item pages; Admin add/edit include an image field.
+- On startup the Surfshark VPN service is seeded / given the surfshark.jpg image if it is missing, so it survives a fresh deploy on free hosting.
+
+## Split checkout update (prepared 2026-11-03, not yet deployed live)
+- Physical Products: all 7 order details required, with bilingual English/Urdu labels, then JazzCash + transaction ID as before.
+- Digital Services: only Full Name + Mobile Number, then the order is saved (payment_method WhatsApp) and the customer is redirected directly to WhatsApp support with a prefilled order message.
+- Website login/registration remains mandatory for every order: anonymous checkout redirects to Register first.
