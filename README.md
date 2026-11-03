@@ -59,3 +59,7 @@ See `RENDER_DEPLOY.txt` for exact Render free-tier steps, including the importan
 - Physical Products: all 7 order details required, with bilingual English/Urdu labels, then JazzCash + transaction ID as before.
 - Digital Services: only Full Name + Mobile Number, then the order is saved (payment_method WhatsApp) and the customer is redirected directly to WhatsApp support with a prefilled order message.
 - Website login/registration remains mandatory for every order: anonymous checkout redirects to Register first.
+
+## Hamburger menu update (prepared 2026-11-03, not yet deployed live)
+- Desktop: top navigation shows all options as before (Home, Services & Products, About, Contact, Login/Register, Admin).
+- Mobile (600px and below): only three lines (hamburger) show at the top; tapping them opens all navigation options.

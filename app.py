@@ -192,8 +192,11 @@ def page(title, body, user=None):
 <header><div class="wrap head">
 <a class="brand" href="/"><img src="/static/logo.jpg" alt="ONLINE SERVICE HUB logo">
 <span><b>ONLINE SERVICE HUB</b><small>ALL ONLINE SERVICES IN ONE PLACE &middot; SINCE 2025</small></span></a>
+<nav class="desktop-nav"><a href="/">Home</a><a href="/services">Services &amp; Products</a><a href="/about">About</a>
+<a href="/contact">Contact</a>{nav_user}{admin_link}</nav>
+<details class="menu"><summary aria-label="Menu"><span></span><span></span><span></span></summary>
 <nav><a href="/">Home</a><a href="/services">Services &amp; Products</a><a href="/about">About</a>
-<a href="/contact">Contact</a>{nav_user}{admin_link}</nav></div></header>
+<a href="/contact">Contact</a>{nav_user}{admin_link}</nav></details></div></header>
 <main class="wrap">{body}</main>
 <footer><div class="wrap foot"><div><b>ONLINE SERVICE HUB</b><br>
 ALL ONLINE SERVICES IN ONE PLACE &middot; SINCE 2025<br>
