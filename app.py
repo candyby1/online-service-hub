@@ -56,7 +56,11 @@ def init_db():
         total REAL NOT NULL, payment_method TEXT NOT NULL DEFAULT 'JazzCash',
         transaction_id TEXT NOT NULL, payment_status TEXT NOT NULL DEFAULT 'pending',
         order_status TEXT NOT NULL DEFAULT 'Placed',
-        created TEXT NOT NULL);
+        created TEXT NOT NULL,
+        full_name TEXT NOT NULL DEFAULT '', delivery_address TEXT NOT NULL DEFAULT '',
+        country TEXT NOT NULL DEFAULT '', state_province TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '', postal_code TEXT NOT NULL DEFAULT '',
+        mobile_number TEXT NOT NULL DEFAULT '');
     CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL, item_id INTEGER NOT NULL,
@@ -67,6 +71,14 @@ def init_db():
         user_id INTEGER NOT NULL, message TEXT NOT NULL, created TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     """)
+    # Order details (English labels) - required for every order, product or service.
+    # Fresh DBs get the columns in the CREATE TABLE above; existing DBs are
+    # migrated in place below so old orders keep working.
+    existing_cols = [r[1] for r in con.execute("PRAGMA table_info(orders)").fetchall()]
+    for col in ("full_name", "delivery_address", "country", "state_province",
+                "city", "postal_code", "mobile_number"):
+        if col not in existing_cols:
+            con.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
     defaults = {
         "support_name": "Hammad",
         "support_number": "03704984676",
@@ -117,6 +129,29 @@ def money(v):
 
 def fmt_item_type(t):
     return "Digital Service" if t == "digital" else "Physical Product"
+
+def order_field(order, key):
+    """Safe read for order-detail columns (old rows may predate a column)."""
+    try:
+        return order[key] or ""
+    except Exception:
+        return ""
+
+ORDER_DETAIL_FIELDS = [
+    ("full_name", "Full Name"),
+    ("delivery_address", "Full Delivery Address"),
+    ("country", "Country"),
+    ("state_province", "State / Province"),
+    ("city", "City"),
+    ("postal_code", "Postal / Zip Code"),
+    ("mobile_number", "Mobile Number"),
+]
+
+def order_details_html(order):
+    rows = "".join(
+        f"<p>{label}: {esc(order_field(order, key))}</p>"
+        for key, label in ORDER_DETAIL_FIELDS)
+    return f"<h2>Order Details</h2>{rows}"
 
 # ---------------------------------------------------------------- page shell
 def page(title, body, user=None):
@@ -392,27 +427,47 @@ def checkout(item_id):
     total = float(it["price"]) * qty
     if request.method == "POST":
         txn = (request.form.get("transaction_id") or "").strip()
+        # Required order details, in English, for every item type.
+        details = {}
+        for key, _label in ORDER_DETAIL_FIELDS:
+            details[key] = (request.form.get(key) or "").strip()
+        missing = [label for key, label in ORDER_DETAIL_FIELDS if not details[key]]
+        if missing:
+            session["msg"] = ("Please fill in all required order details: " + ", ".join(missing) + ".")
+            return redirect(f"/checkout/{item_id}?qty={qty}")
         if not txn:
             session["msg"] = "Payment is required: please enter your JazzCash transaction ID. An order is not complete without payment."
             return redirect(f"/checkout/{item_id}?qty={qty}")
         con = db()
         cur = con.execute(
-            "INSERT INTO orders(user_id, item_id, qty, total, payment_method, transaction_id, created) "
-            "VALUES(?, ?, ?, ?, 'JazzCash', ?, ?)",
-            (u["id"], item_id, qty, total, txn, now()))
+            "INSERT INTO orders(user_id, item_id, qty, total, payment_method, transaction_id, created, "
+            "full_name, delivery_address, country, state_province, city, postal_code, mobile_number) "
+            "VALUES(?, ?, ?, ?, 'JazzCash', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (u["id"], item_id, qty, total, txn, now(),
+             details["full_name"], details["delivery_address"], details["country"],
+             details["state_province"], details["city"], details["postal_code"],
+             details["mobile_number"]))
         oid = cur.lastrowid
         con.commit()
         notify(u["id"], f"Order Confirmation: Order #{oid} placed for {it['name']}. Payment is pending admin verification.")
         session["msg"] = f"Order Confirmation: Order #{oid} received. Payment is pending admin verification."
         return redirect(f"/order/{oid}")
     body = (flash() + f"<h1>Checkout</h1><p>{esc(it['name'])} &times; {qty} = <b>{money(total)}</b></p>"
+            "<h2>Order Details</h2><p>All fields below are required, for any product or service.</p>"
             "<h2>Pay now - JazzCash (manual payment, no automatic gateway)</h2>"
             f"<p>Send <b>{money(total)}</b> to JazzCash number <b>{esc(setting('jazzcash_number'))}</b> "
             f"(account name: <b>{esc(setting('jazzcash_name'))}</b>), then enter your transaction ID below.</p>"
             f'<form method="post"><input type="hidden" name="qty" value="{qty}">'
+            f'<label>Full Name<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
+            '<label>Full Delivery Address<br><textarea name="delivery_address" required></textarea></label><br>'
+            '<label>Country<br><input name="country" required></label><br>'
+            '<label>State / Province<br><input name="state_province" required></label><br>'
+            '<label>City<br><input name="city" required></label><br>'
+            '<label>Postal / Zip Code<br><input name="postal_code" required></label><br>'
+            f'<label>Mobile Number<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
             '<label>JazzCash Transaction ID<br><input name="transaction_id" required placeholder="Enter transaction ID"></label><br>'
             '<button class="btn" type="submit">Confirm Payment &amp; Place Order</button></form>'
-            "<p>Without a transaction ID the order will not be placed. After the admin verifies "
+            "<p>Without all order details and a transaction ID the order will not be placed. After the admin verifies "
             "your payment, the order status updates in your dashboard.</p>")
     return page("Checkout", body, user=u)
 
@@ -437,6 +492,7 @@ def order_detail(order_id):
             f"<p>Payment: JazzCash &middot; Transaction ID: {esc(o['transaction_id'])} &middot; "
             f"Payment status: <b>{esc(o['payment_status'])}</b></p>"
             f"<p>Order status: <b>{esc(o['order_status'])}</b></p>"
+            f"{order_details_html(o)}"
             f"<h2>Order Tracking</h2>{tracking_steps(o)}")
     if is_admin:
         body += "<p><a href='/dashboard'>Back to Dashboard</a> | <a href='/admin/orders'>Admin Orders</a></p>"
@@ -595,6 +651,10 @@ def admin_orders():
     rows = "".join(
         f'<div class="card"><b>Order #{o["id"]}</b> &middot; {esc(o["iname"])} &times; {o["qty"]} &middot; {money(o["total"])}<br>'
         f'Customer: {esc(o["uname"])} ({esc(o["uw"])})<br>Transaction ID: {esc(o["transaction_id"])}<br>'
+        f'Full Name: {esc(order_field(o, "full_name"))}<br>'
+        f'Full Delivery Address: {esc(order_field(o, "delivery_address"))}<br>'
+        f'Country: {esc(order_field(o, "country"))} &middot; State / Province: {esc(order_field(o, "state_province"))} &middot; City: {esc(order_field(o, "city"))}<br>'
+        f'Postal / Zip Code: {esc(order_field(o, "postal_code"))} &middot; Mobile Number: {esc(order_field(o, "mobile_number"))}<br>'
         f'Payment: {esc(o["payment_status"])} &middot; Status: {esc(o["order_status"])}<br>'
         f'<form method="post" style="display:inline"><input type="hidden" name="order_id" value="{o["id"]}">'
         f'<button name="action" value="verify">Verify Payment</button> '
