@@ -1,0 +1,24 @@
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0b0b;color:#f5f5f5;line-height:1.5}
+a{color:#4da3ff}.wrap{max-width:1000px;margin:0 auto;padding:0 16px}
+header{background:#000;border-bottom:2px solid #c9a227;position:sticky;top:0;z-index:10}
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#fff}
+.brand img{width:64px;height:64px;object-fit:cover;border-radius:10px}
+.brand b{color:#e8c15a;font-size:20px;display:block}.brand small{color:#9ecbff;font-size:11px;letter-spacing:1px}
+nav{display:flex;flex-wrap:wrap;gap:10px}nav a{color:#eee;text-decoration:none;padding:6px 8px}
+main{padding:24px 16px 80px}.hero{background:#141414;border:1px solid #c9a227;border-radius:14px;padding:24px;margin-bottom:24px}
+h1{color:#e8c15a}h2{color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:14px}
+.tag{display:inline-block;background:#0b3d91;color:#fff;padding:2px 8px;border-radius:20px;font-size:12px}
+.price{font-weight:700;color:#e8c15a;font-size:18px}
+.btn{display:inline-block;background:#c9a227;color:#000;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:8px;border:0;cursor:pointer}
+.btn.outline{background:transparent;color:#fff;border:1px solid #c9a227}
+input,textarea,select{width:100%;max-width:520px;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #444;background:#222;color:#fff}
+button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;background:#0b3d91;color:#fff}
+.msg{background:#123d1f;border:1px solid #2e7d32;padding:10px;border-radius:8px;margin-bottom:14px}
+.empty{background:#1a1a1a;border:1px dashed #c9a227;padding:20px;border-radius:12px}
+.steps{list-style:none;padding:0}.steps li{padding:8px;border-left:4px solid #444;margin:6px 0}
+.steps li.done{border-color:#2e7d32;color:#8be08b}
+footer{border-top:1px solid #333;padding:20px 0;background:#000}.foot{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between}
+.wa{position:fixed;right:16px;bottom:16px;background:#25d366;color:#000;font-weight:700;text-decoration:none;padding:12px 16px;border-radius:30px;z-index:20}
+@media(max-width:600px){.brand img{width:52px;height:52px}.brand b{font-size:16px}main{padding-bottom:100px}}
