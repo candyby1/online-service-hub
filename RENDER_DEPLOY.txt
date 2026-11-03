@@ -1,0 +1,72 @@
+ONLINE SERVICE HUB - FREE DEPLOY ON RENDER (exact steps)
+=========================================================
+
+This app is Python Flask + SQLite, in one app.py file, with:
+  requirements.txt (Flask + gunicorn)
+  static/logo.jpg (client logo)
+  static/style.css
+  app.py (all pages, customer accounts, orders, admin)
+
+You need: a free Render account and a free GitHub account.
+Do NOT put any password or PIN in the code or in the repo. The first
+admin PIN is admin123 - change it in Site Settings right after first
+login, from inside the website itself.
+
+STEP 1 - PUT THE CODE ON GITHUB
+  1. Create a new GitHub repository, e.g. online-service-hub.
+  2. Upload ALL files from this folder (app.py, requirements.txt,
+     README.md, this file, static/logo.jpg, static/style.css).
+     Do NOT upload data.db if one was created during local testing -
+     the app creates a fresh, empty database on first start.
+
+STEP 2 - CREATE THE FREE WEB SERVICE ON RENDER
+  1. In Render, click New + > Web Service.
+  2. Connect the GitHub repository from Step 1.
+  3. Settings:
+       Name: online-service-hub (or any free name you like)
+       Region: choose the closest free region
+       Branch: main
+       Runtime: Python 3
+       Build Command: pip install -r requirements.txt
+       Start Command: gunicorn app:app --bind 0.0.0.0:$PORT
+       Instance Type: Free
+  4. Environment variables (in Render > Environment):
+       OSH_SECRET = a long random string you make up (do not reuse
+                    the default "change-me-in-production")
+       (PORT is set automatically by Render - do not set it yourself
+        unless Render asks for it.)
+       (OSH_DB is optional - leave it unset so it defaults to data.db
+        in the app folder, unless you add a persistent disk below.)
+  5. Click Create Web Service. Wait for the build to finish, then open
+     the URL Render gives you, e.g. https://online-service-hub.onrender.com
+     (your exact URL will be shown in Render). Free services sleep
+     after inactivity, so the first load can take about a minute.
+
+STEP 3 - FIRST SETUP ON THE LIVE SITE
+  1. Open the live site, go to Admin, log in with PIN: admin123
+  2. Admin > Site Settings: change the Admin PIN immediately.
+  3. Admin > Services & Products: add the first Digital Service or
+     Physical Product with its real price. Until you add one, the
+     catalog is empty by design and customers cannot order.
+  4. Check that the JazzCash payment details and the WhatsApp support
+     contact are correct in Site Settings.
+
+IMPORTANT WARNING - READ PLAINLY
+  SQLite on free Render WITHOUT a persistent disk can reset on
+  redeploy or restart. That means customers, orders, items and reviews
+  stored in data.db can be lost when Render restarts or redeploys the
+  free service. This is a Render free-tier limitation, not a bug in
+  this code.
+  To keep data permanently you must either:
+    (a) add a Render persistent disk (paid on Render) and set OSH_DB
+        to a path on that disk, e.g. /data/data.db, or
+    (b) move the database to a hosted database service later.
+  If you stay on the free tier without a disk, treat the site as a
+  working demo / starter site and export important orders regularly
+  from Admin > Orders & Payments.
+
+WHAT IS NOT AUTOMATIC
+  Payment is manual JazzCash + transaction ID + admin verification -
+  there is no payment gateway in this app. Notifications are
+  in-account confirmations, not real emails, because registration
+  collects no email address.
