@@ -63,3 +63,13 @@ See `RENDER_DEPLOY.txt` for exact Render free-tier steps, including the importan
 ## Hamburger menu update (prepared 2026-11-03, not yet deployed live)
 - Desktop: top navigation shows all options as before (Home, Services & Products, About, Contact, Login/Register, Admin).
 - Mobile (600px and below): only three lines (hamburger) show at the top; tapping them opens all navigation options.
+
+## Admin visibility fix (prepared 2026-11-03, not yet deployed live)
+- Admin button removed from navigation (desktop and mobile): admin login is reachable only via the direct /admin/login URL.
+- Admin login page no longer shows the first PIN text; it only says admin access is PIN-protected.
+
+## Hamburger position fix (prepared 2026-11-03, not yet deployed live)
+- Mobile hamburger (3 lines) is pushed to the right side of the header (margin-left:auto, header no-wrap on mobile) instead of the left.
+
+## English-only website update (prepared 2026-11-03, not yet deployed live)
+- Website content is English only: bilingual English/Urdu checkout labels reverted to English only, and the digital checkout button is now "Order on WhatsApp" (no Roman Urdu on the website). Chat with the user remains in Roman Urdu; this change is website-only.

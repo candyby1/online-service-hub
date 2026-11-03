@@ -159,13 +159,13 @@ def order_field(order, key):
         return ""
 
 ORDER_DETAIL_FIELDS = [
-    ("full_name", "Full Name — مکمل نام"),
-    ("delivery_address", "Full Delivery Address — مکمل ڈیلیوری ایڈریس"),
-    ("country", "Country — ملک"),
-    ("state_province", "State / Province — ریاست / صوبہ"),
-    ("city", "City — شہر"),
-    ("postal_code", "Postal / Zip Code — ڈاک کا کوڈ"),
-    ("mobile_number", "Mobile Number — موبائل نمبر"),
+    ("full_name", "Full Name"),
+    ("delivery_address", "Full Delivery Address"),
+    ("country", "Country"),
+    ("state_province", "State / Province"),
+    ("city", "City"),
+    ("postal_code", "Postal / Zip Code"),
+    ("mobile_number", "Mobile Number"),
 ]
 
 def order_details_html(order):
@@ -184,7 +184,10 @@ def page(title, body, user=None):
                     f'<a href="/logout">Logout</a>')
     else:
         nav_user = '<a href="/login">Login</a> <a href="/register">Register</a>'
-    admin_link = '<a href="/admin">Admin</a>' if is_admin else '<a href="/admin/login">Admin</a>'
+    # Admin button is intentionally NOT shown in navigation: admin login
+    # stays reachable only via the direct /admin/login URL, so the admin
+    # entry point is not advertised to every visitor.
+    admin_link = ""
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(title)} - ONLINE SERVICE HUB</title>
@@ -520,9 +523,9 @@ def checkout(item_id):
                 "Login on the website is mandatory: you are already logged in. "
                 "On submit, your order is saved and you go directly to WhatsApp to complete it.</p>"
                 f'<form method="post"><input type="hidden" name="qty" value="{qty}">'
-                f'<label>Full Name — مکمل نام<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
-                f'<label>Mobile Number — موبائل نمبر<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
-                '<button class="btn" type="submit">WhatsApp par Order karein</button></form>')
+                f'<label>Full Name<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
+                f'<label>Mobile Number<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
+                '<button class="btn" type="submit">Order on WhatsApp</button></form>')
         return page("Checkout", body, user=u)
     body = (flash() + f"<h1>Checkout</h1><p>{esc(it['name'])} &times; {qty} = <b>{money(total)}</b></p>"
             "<h2>Order Details</h2><p>All fields below are required for Physical Products.</p>"
@@ -530,13 +533,13 @@ def checkout(item_id):
             f"<p>Send <b>{money(total)}</b> to JazzCash number <b>{esc(setting('jazzcash_number'))}</b> "
             f"(account name: <b>{esc(setting('jazzcash_name'))}</b>), then enter your transaction ID below.</p>"
             f'<form method="post"><input type="hidden" name="qty" value="{qty}">'
-            f'<label>Full Name — مکمل نام<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
-            '<label>Full Delivery Address — مکمل ڈیلیوری ایڈریس<br><textarea name="delivery_address" required></textarea></label><br>'
-            '<label>Country — ملک<br><input name="country" required></label><br>'
-            '<label>State / Province — ریاست / صوبہ<br><input name="state_province" required></label><br>'
-            '<label>City — شہر<br><input name="city" required></label><br>'
-            '<label>Postal / Zip Code — ڈاک کا کوڈ<br><input name="postal_code" required></label><br>'
-            f'<label>Mobile Number — موبائل نمبر<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
+            f'<label>Full Name<br><input name="full_name" value="{esc(u["name"])}" required></label><br>'
+            '<label>Full Delivery Address<br><textarea name="delivery_address" required></textarea></label><br>'
+            '<label>Country<br><input name="country" required></label><br>'
+            '<label>State / Province<br><input name="state_province" required></label><br>'
+            '<label>City<br><input name="city" required></label><br>'
+            '<label>Postal / Zip Code<br><input name="postal_code" required></label><br>'
+            f'<label>Mobile Number<br><input name="mobile_number" value="{esc(u["whatsapp"])}" required></label><br>'
             '<label>JazzCash Transaction ID<br><input name="transaction_id" required placeholder="Enter transaction ID"></label><br>'
             '<button class="btn" type="submit">Confirm Payment &amp; Place Order</button></form>'
             "<p>Without all order details and a transaction ID the order will not be placed. After the admin verifies "
@@ -590,7 +593,7 @@ def admin_login():
         session["msg"] = "Wrong admin PIN."
         return redirect(url_for("admin_login"))
     return page("Admin Login", flash() + """<h1>Admin Login</h1>
-<p>Admin access is PIN-protected. First PIN: <b>admin123</b> - change it in Site Settings after login.</p>
+<p>Admin access is PIN-protected.</p>
 <form method="post"><label>Admin PIN<br><input type="password" name="pin" required></label><br>
 <button class="btn" type="submit">Login as Admin</button></form>""")
 
